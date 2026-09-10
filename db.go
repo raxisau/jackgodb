@@ -5,13 +5,15 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/mysqldialect"
-	"github.com/uptrace/bun/extra/bundebug"
-
+	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
+	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/driver/sqliteshim"
+	"github.com/uptrace/bun/extra/bundebug"
 )
 
 const (
@@ -23,6 +25,10 @@ const (
 // https://bun.uptrace.dev/guide/models.html
 // https://bun.uptrace.dev/
 // https://bun.uptrace.dev/guide/golang-orm.html
+
+var (
+	SQLDebug = false
+)
 
 func OpenMySQLDBConnection(dsn string) *DAO {
 	sqlDB, err := sql.Open("mysql", dsn)
@@ -36,9 +42,11 @@ func OpenMySQLDBConnection(dsn string) *DAO {
 
 	db := bun.NewDB(sqlDB, mysqldialect.New())
 
-	db.AddQueryHook(bundebug.NewQueryHook(
-		bundebug.WithVerbose(true),
-	))
+	if SQLDebug {
+		db.AddQueryHook(bundebug.NewQueryHook(
+			bundebug.WithVerbose(true),
+		))
+	}
 
 	dao := NewDAO(db)
 	dao.dialect = DialectMySQL
@@ -56,12 +64,36 @@ func OpenSQLiteDBConnection(dsn string) *DAO {
 
 	db := bun.NewDB(sqlDB, sqlitedialect.New())
 
-	db.AddQueryHook(bundebug.NewQueryHook(
-		bundebug.WithVerbose(true),
-	))
+	if SQLDebug {
+		db.AddQueryHook(bundebug.NewQueryHook(
+			bundebug.WithVerbose(true),
+		))
+	}
 
 	dao := NewDAO(db)
 	dao.dialect = DialectSQLite
+
+	return dao
+}
+func OpenPostgreSQLDBConnection(dsn string) *DAO {
+	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+
+	err := sqlDB.Ping()
+	if err != nil {
+		sqlDB.Close()
+		panic(err)
+	}
+
+	db := bun.NewDB(sqlDB, pgdialect.New())
+
+	if SQLDebug {
+		db.AddQueryHook(bundebug.NewQueryHook(
+			bundebug.WithVerbose(true),
+		))
+	}
+
+	dao := NewDAO(db)
+	dao.dialect = DialectPostgreSQL
 
 	return dao
 }
