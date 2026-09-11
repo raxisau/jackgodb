@@ -114,82 +114,69 @@ A complete working reference model lives in [`internal/demo/statuses.go`](intern
 ## Quickstart
 
 ```go
-package demo
+package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"time"
+	"os"
 
 	"github.com/raxisau/jackgodb"
-	"github.com/uptrace/bun"
+	"github.com/raxisau/jackgodb/internal/demo"
 )
 
-type StatusesDAO struct {
-	*jackgodb.ModelDAO[*Statuses]
-}
+func main() {
+	setUpLogging()
 
-type Statuses struct {
-	bun.BaseModel `bun:"table:reg_statuses,alias:RSTAT"`
+	// Empty DSN = in-memory SQLite. See "Connections" for MySQL/PostgreSQL.
+	dao := jackgodb.OpenSQLiteDBConnection("")
+	defer dao.Close()
 
-	jackgodb.ModelRecord[*Statuses] `bun:"-" json:"-"`
+	statusDao := demo.NewStatusesDAO(dao)
 
-	ID                  int64     `bun:"id,pk,autoincrement" json:"id,omitempty"`
-	StatusCode          string    `bun:"f_status_code,unique" json:"f_status_code,omitempty"`
-	StatusDescription   *string   `bun:"f_status_description" json:"f_status_description,omitempty"`
-	StatusReasonDefault *string   `bun:"f_status_reason_default" json:"f_status_reason_default,omitempty"`
-	StatusURL           *string   `bun:"f_status_url" json:"f_status_url,omitempty"`
-	CreatedAt           time.Time `bun:"f_created_at" json:"f_created_at,omitzero"`
-	Comments            *string   `bun:"f_comments" json:"f_comments,omitempty"`
-}
-
-var aliasStatuses = map[string]string{
-	"id":                  "id",
-	"statusCode":          "f_status_code",
-	"statusDescription":   "f_status_description",
-	"statusReasonDefault": "f_status_reason_default",
-	"statusURL":           "f_status_url",
-	"createdAt":           "f_created_at",
-	"comments":            "f_comments",
-}
-
-func NewStatusesDAO(dao *jackgodb.DAO) *StatusesDAO {
-	return &StatusesDAO{
-		ModelDAO: jackgodb.NewModelDAO(
-			dao,
-			aliasStatuses,
-			func() *Statuses {
-				return &Statuses{}
-			}),
-	}
-}
-
-func (dao *StatusesDAO) NewStatuses() *Statuses {
-	record := dao.New()
-	return record
-}
-
-func (m *Statuses) LoadByName(statusCode string) *Statuses {
-
-	record := m.Self
-	record.SetID(0)
-
-	if statusCode == "" {
-		return nil
-	}
-
-	err := m.Dao.Db.NewSelect().
-		Model(record).
-		Where("f_status_code=?", statusCode).
-		Limit(1).
-		Scan(context.Background())
-
+	// Create the table (bun DDL; in production use migrations).
+	ctx := context.Background()
+	_, err := dao.Db.NewCreateTable().Model((*demo.Statuses)(nil)).IfNotExists().Exec(ctx)
 	if err != nil {
-		slog.Error("1. Statuses.LoadByName", "error", err)
-		return nil
+		panic(err)
 	}
 
-	return m
+	// Insert
+	rec := statusDao.NewStatuses()
+	rec.SetValue("statusCode", "ACTIVE")
+	rec.SetValue("statusDescription", "rec.SetValue statusDescription")
+	rec.SetValue("statusReasonDefault", "rec.SetValue statusReasonDefault")
+	rec.SetValue("statusURL", "http://rec.SetValuestatusURL")
+	rec.SetValue("comments", "rec.SetValue comments")
+	id := rec.Save() // returns the new primary key
+
+	// Load
+	loaded := statusDao.NewStatuses()
+	loaded.Load(id)
+	fmt.Println(loaded.ToJSONIndent())
+
+	// Update — use SetValue, which marks the column dirty
+	loaded.SetValue("statusCode", "RETIRED")
+	loaded.Save()
+
+	loaded.Load(id)
+	fmt.Println(loaded.ToJSONIndent())
+
+	// Delete
+	loaded.Delete()
+	slog.Info("server stopped")
+}
+
+func setUpLogging() *slog.Logger {
+	// https://pkg.go.dev/log/slog#example-SetLogLoggerLevel-Log
+	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
+
+	log := slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	slog.SetDefault(log)
+	slog.Info("Starting System")
+
+	return log
 }
 ```
 
