@@ -97,9 +97,8 @@ func (m *ModelRecord[T]) Save() int64 {
 }
 func (m *ModelRecord[T]) InsertIgnore() int64 {
 	record := m.Self
-	dao := m.Dao
 
-	result, err := dao.Db.NewInsert().
+	_, err := m.Dao.Db.NewInsert().
 		Ignore().
 		Model(record).
 		Exec(context.Background())
@@ -109,53 +108,32 @@ func (m *ModelRecord[T]) InsertIgnore() int64 {
 		return 0
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		slog.Error("2. ModelRecord[T].InsertIgnore", "error", err)
-		return 0
-	}
-
-	record.SetID(id)
-	return id
+	return record.GetID()
 }
 func (m *ModelRecord[T]) Insert() int64 {
 	record := m.Self
-	dao := m.Dao
 
-	insertQuery := dao.Db.NewInsert().
-		Model(record)
+	_, err := m.Dao.Db.NewInsert().
+		Ignore().
+		Model(record).
+		Exec(context.Background())
 
-	for column, dirty := range m.dirty {
-		if dirty {
-			insertQuery.Column(column)
-		}
-	}
-
-	result, err := insertQuery.Exec(context.Background())
 	if err != nil {
-		slog.Error("1. ModelRecord[T].Insert", "error", err)
+		slog.Error("1. ModelRecord[T].InsertIgnore", "error", err)
 		return 0
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		slog.Error("2. ModelRecord[T].Insert", "error", err)
-		return 0
-	}
-
-	record.SetID(id)
-	return id
+	return record.GetID()
 }
 func (m *ModelRecord[T]) Update() int64 {
 	record := m.Self
-	dao := m.Dao
 
 	if m.IsClean() {
 		slog.Error("2. ModelRecord[T].Update", "error", "nothing to update")
 		return 0
 	}
 
-	updateQuery := dao.Db.NewUpdate().
+	updateQuery := m.Dao.Db.NewUpdate().
 		Model(record).
 		WherePK()
 
@@ -185,9 +163,8 @@ func (m *ModelRecord[T]) Update() int64 {
 
 func (m *ModelRecord[T]) Delete() int64 {
 	record := m.Self
-	dao := m.Dao
 
-	result, err := dao.Db.NewDelete().
+	result, err := m.Dao.Db.NewDelete().
 		Model(record).
 		WherePK().
 		Exec(context.Background())
@@ -217,32 +194,57 @@ func (m *ModelRecord[T]) SetID(id int64) {
 }
 
 func (m *ModelRecord[T]) ToAPI() map[string]any {
+	jsonModel := m.ToJSON()
 	var out map[string]any
+	if err := json.Unmarshal([]byte(jsonModel), &out); err != nil {
+		slog.Error("2. ModelRecord[T].ToAPI", "error", err)
+		return nil
+	}
+	return out
+}
+func (m *ModelRecord[T]) ToJSONIndent() string {
 
 	v := reflect.ValueOf(m.Self)
 	if !v.IsValid() {
-		return nil
+		return ""
 	}
 
 	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
-			return nil
+			return ""
+		}
+		v = v.Elem()
+	}
+
+	jsonBytes, err := json.MarshalIndent(v.Interface(), "", "  ")
+	if err != nil {
+		slog.Error("1. ModelRecord[T].ToJSONIndent", "error", err)
+		return ""
+	}
+
+	return string(jsonBytes)
+}
+func (m *ModelRecord[T]) ToJSON() string {
+
+	v := reflect.ValueOf(m.Self)
+	if !v.IsValid() {
+		return ""
+	}
+
+	for v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return ""
 		}
 		v = v.Elem()
 	}
 
 	jsonBytes, err := json.Marshal(v.Interface())
 	if err != nil {
-		slog.Error("1. ModelRecord[T].ToAPI", "error", err)
-		return nil
+		slog.Error("1. ModelRecord[T].ToJSON", "error", err)
+		return ""
 	}
 
-	if err := json.Unmarshal(jsonBytes, &out); err != nil {
-		slog.Error("2. ModelRecord[T].ToAPI", "error", err)
-		return nil
-	}
-
-	return out
+	return string(jsonBytes)
 }
 
 func (m *ModelRecord[T]) ToWhere(query *bun.SelectQuery, args map[string]any) *bun.SelectQuery {
@@ -318,12 +320,10 @@ func (m *ModelRecord[T]) ToWhere(query *bun.SelectQuery, args map[string]any) *b
 }
 
 func (m *ModelRecord[T]) Load(id int64) T {
-
-	dao := m.Dao
 	record := m.Self
 	record.SetID(id)
 
-	err := dao.Db.NewSelect().
+	err := m.Dao.Db.NewSelect().
 		Model(record).
 		WherePK().
 		Limit(1).

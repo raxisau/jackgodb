@@ -54,7 +54,8 @@ func ConvertTo(value any, targetType reflect.Type) (any, error) {
 			case *time.Time:
 				return v, nil
 			case string:
-				return ParseUTCDateTime(v)
+				t, err := ParseUTCDateTime(v)
+				return &t, err
 			}
 		}
 	}

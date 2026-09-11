@@ -5,7 +5,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/mysqldialect"
@@ -62,6 +61,10 @@ func OpenSQLiteDBConnection(dsn string) *DAO {
 		panic(err)
 	}
 
+	sqlDB.SetMaxOpenConns(MaxOpenConns)
+	sqlDB.SetMaxIdleConns(MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(MaxLifetime)
+
 	db := bun.NewDB(sqlDB, sqlitedialect.New())
 
 	if SQLDebug {
@@ -78,11 +81,9 @@ func OpenSQLiteDBConnection(dsn string) *DAO {
 func OpenPostgreSQLDBConnection(dsn string) *DAO {
 	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 
-	err := sqlDB.Ping()
-	if err != nil {
-		sqlDB.Close()
-		panic(err)
-	}
+	sqlDB.SetMaxOpenConns(MaxOpenConns)
+	sqlDB.SetMaxIdleConns(MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(MaxLifetime)
 
 	db := bun.NewDB(sqlDB, pgdialect.New())
 

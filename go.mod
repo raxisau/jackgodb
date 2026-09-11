@@ -4,7 +4,6 @@ go 1.26.4
 
 require (
 	github.com/go-sql-driver/mysql v1.10.1
-	github.com/lib/pq v1.12.3
 	github.com/uptrace/bun v1.2.18
 	github.com/uptrace/bun/dialect/mysqldialect v1.2.18
 	github.com/uptrace/bun/dialect/pgdialect v1.2.18

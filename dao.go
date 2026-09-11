@@ -48,6 +48,7 @@ func (dao *DAO) DbIn(start, count int) string {
 
 type ModelDAO[T DBModel] struct {
 	Db        *bun.DB
+	dialect   string
 	alias     map[string]string
 	newRecord func() T
 }
@@ -59,6 +60,7 @@ type ModelDAOAttacher[T DBModel] interface {
 func NewModelDAO[T DBModel](dao *DAO, alias map[string]string, newRecord func() T) *ModelDAO[T] {
 	return &ModelDAO[T]{
 		Db:        dao.Db,
+		dialect:   dao.dialect,
 		alias:     alias,
 		newRecord: newRecord,
 	}

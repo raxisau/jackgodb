@@ -10,6 +10,10 @@ dist/
 # Compiled Java class files
 *.class
 
+# Coverage files
+cp.html
+cp.out
+
 # Compiled Python bytecode
 *.py[cod]
 
