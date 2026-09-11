@@ -187,25 +187,21 @@ func generateModel(table Table) string {
 	}
 
 	sb.WriteString("package model\n\n")
-
+	sb.WriteString("import (\n")
+	sb.WriteString("\t\"github.com/uptrace/bun\"\n")
+	sb.WriteString("\t\"github.com/raxisau/jackgodb\"\n")
 	if needsTime {
-		sb.WriteString("import (\n")
 		sb.WriteString("\t\"time\"\n\n")
-		sb.WriteString("\t\"github.com/uptrace/bun\"\n")
-		sb.WriteString(")\n\n")
-	} else {
-		sb.WriteString("import (\n")
-		sb.WriteString("\t\"github.com/uptrace/bun\"\n")
-		sb.WriteString(")\n\n")
 	}
+	sb.WriteString(")\n\n")
 
 	fmt.Fprintf(&sb, "type %s struct {\n", table.DAOName)
-	fmt.Fprintf(&sb, "\t*ModelDAO[*%s]\n", table.GoName)
+	fmt.Fprintf(&sb, "\t*jackgodb.ModelDAO[*%s]\n", table.GoName)
 	sb.WriteString("}\n\n")
 
 	fmt.Fprintf(&sb, "type %s struct {\n", table.GoName)
 	fmt.Fprintf(&sb, "\tbun.BaseModel `bun:\"table:%s,alias:%s\"`\n\n", table.Name, table.Alias)
-	fmt.Fprintf(&sb, "\tModelRecord[*%s] `bun:\"-\" json:\"-\"`\n\n", table.GoName)
+	fmt.Fprintf(&sb, "\tjackgodb.ModelRecord[*%s] `bun:\"-\" json:\"-\"`\n\n", table.GoName)
 
 	pk := primaryKeyColumn(table)
 
@@ -236,10 +232,10 @@ func generateModel(table Table) string {
 	}
 	fmt.Fprintf(&sb, "}\n")
 
-	fmt.Fprintf(&sb, "func (dao *DAO) New%sDAO() *%s {\n", table.GoName, table.DAOName)
+	fmt.Fprintf(&sb, "func New%sDAO(dao *jackgodb.DAO) *%s {\n", table.GoName, table.DAOName)
 
 	fmt.Fprintf(&sb, "\treturn &%s{\n", table.DAOName)
-	fmt.Fprintf(&sb, "\t\tModelDAO: NewModelDAO(\n")
+	fmt.Fprintf(&sb, "\t\tModelDAO: jackgodb.NewModelDAO(\n")
 	fmt.Fprintf(&sb, "\t\t\tdao,\n")
 	fmt.Fprintf(&sb, "\t\t\talias%s,\n", table.GoName)
 	fmt.Fprintf(&sb, "\t\t\tfunc() *%s {\n", table.GoName)
