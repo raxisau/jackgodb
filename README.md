@@ -27,14 +27,20 @@ go get github.com/raxisau/jackgodb@latest
 Your model embeds both a `bun.BaseModel` (table name/alias) and `ModelRecord[*T]`:
 
 ```go
-package model
+package demo
 
 import (
+	"context"
+	"log/slog"
 	"time"
 
 	"github.com/raxisau/jackgodb"
 	"github.com/uptrace/bun"
 )
+
+type StatusesDAO struct {
+	*jackgodb.ModelDAO[*Statuses]
+}
 
 type Statuses struct {
 	bun.BaseModel `bun:"table:reg_statuses,alias:RSTAT"`
@@ -44,23 +50,59 @@ type Statuses struct {
 	ID                  int64     `bun:"id,pk,autoincrement" json:"id,omitempty"`
 	StatusCode          string    `bun:"f_status_code,unique" json:"f_status_code,omitempty"`
 	StatusDescription   *string   `bun:"f_status_description" json:"f_status_description,omitempty"`
+	StatusReasonDefault *string   `bun:"f_status_reason_default" json:"f_status_reason_default,omitempty"`
 	StatusURL           *string   `bun:"f_status_url" json:"f_status_url,omitempty"`
 	CreatedAt           time.Time `bun:"f_created_at" json:"f_created_at,omitzero"`
+	Comments            *string   `bun:"f_comments" json:"f_comments,omitempty"`
 }
 
-// Alias map: shorthand names your code/API uses -> real column names.
 var aliasStatuses = map[string]string{
-	"id":                "id",
-	"statusCode":        "f_status_code",
-	"statusDescription": "f_status_description",
-	"statusURL":         "f_status_url",
-	"createdAt":         "f_created_at",
+	"id":                  "id",
+	"statusCode":          "f_status_code",
+	"statusDescription":   "f_status_description",
+	"statusReasonDefault": "f_status_reason_default",
+	"statusURL":           "f_status_url",
+	"createdAt":           "f_created_at",
+	"comments":            "f_comments",
 }
 
-func NewStatusesDAO(dao *jackgodb.DAO) *jackgodb.ModelDAO[*Statuses] {
-	return jackgodb.NewModelDAO(dao, aliasStatuses, func() *Statuses {
-		return &Statuses{}
-	})
+func NewStatusesDAO(dao *jackgodb.DAO) *StatusesDAO {
+	return &StatusesDAO{
+		ModelDAO: jackgodb.NewModelDAO(
+			dao,
+			aliasStatuses,
+			func() *Statuses {
+				return &Statuses{}
+			}),
+	}
+}
+
+func (dao *StatusesDAO) NewStatuses() *Statuses {
+	record := dao.New()
+	return record
+}
+
+func (m *Statuses) LoadByName(statusCode string) *Statuses {
+
+	record := m.Self
+	record.SetID(0)
+
+	if statusCode == "" {
+		return nil
+	}
+
+	err := m.Dao.Db.NewSelect().
+		Model(record).
+		Where("f_status_code=?", statusCode).
+		Limit(1).
+		Scan(context.Background())
+
+	if err != nil {
+		slog.Error("1. Statuses.LoadByName", "error", err)
+		return nil
+	}
+
+	return m
 }
 ```
 
@@ -72,46 +114,82 @@ A complete working reference model lives in [`internal/demo/statuses.go`](intern
 ## Quickstart
 
 ```go
-package main
+package demo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/raxisau/jackgodb"
 	"github.com/uptrace/bun"
 )
 
-func main() {
-	// Empty DSN = in-memory SQLite. See "Connections" for MySQL/PostgreSQL.
-	dao := jackgodb.OpenSQLiteDBConnection("")
-	defer dao.Close()
+type StatusesDAO struct {
+	*jackgodb.ModelDAO[*Statuses]
+}
 
-	statusDao := NewStatusesDAO(dao)
+type Statuses struct {
+	bun.BaseModel `bun:"table:reg_statuses,alias:RSTAT"`
 
-	// Create the table (bun DDL; in production use migrations).
-	ctx := context.Background()
-	_, err := dao.Db.NewCreateTable().Model((*Statuses)(nil)).IfNotExists().Exec(ctx)
-	if err != nil {
-		panic(err)
+	jackgodb.ModelRecord[*Statuses] `bun:"-" json:"-"`
+
+	ID                  int64     `bun:"id,pk,autoincrement" json:"id,omitempty"`
+	StatusCode          string    `bun:"f_status_code,unique" json:"f_status_code,omitempty"`
+	StatusDescription   *string   `bun:"f_status_description" json:"f_status_description,omitempty"`
+	StatusReasonDefault *string   `bun:"f_status_reason_default" json:"f_status_reason_default,omitempty"`
+	StatusURL           *string   `bun:"f_status_url" json:"f_status_url,omitempty"`
+	CreatedAt           time.Time `bun:"f_created_at" json:"f_created_at,omitzero"`
+	Comments            *string   `bun:"f_comments" json:"f_comments,omitempty"`
+}
+
+var aliasStatuses = map[string]string{
+	"id":                  "id",
+	"statusCode":          "f_status_code",
+	"statusDescription":   "f_status_description",
+	"statusReasonDefault": "f_status_reason_default",
+	"statusURL":           "f_status_url",
+	"createdAt":           "f_created_at",
+	"comments":            "f_comments",
+}
+
+func NewStatusesDAO(dao *jackgodb.DAO) *StatusesDAO {
+	return &StatusesDAO{
+		ModelDAO: jackgodb.NewModelDAO(
+			dao,
+			aliasStatuses,
+			func() *Statuses {
+				return &Statuses{}
+			}),
+	}
+}
+
+func (dao *StatusesDAO) NewStatuses() *Statuses {
+	record := dao.New()
+	return record
+}
+
+func (m *Statuses) LoadByName(statusCode string) *Statuses {
+
+	record := m.Self
+	record.SetID(0)
+
+	if statusCode == "" {
+		return nil
 	}
 
-	// Insert
-	rec := statusDao.New()
-	rec.StatusCode = "ACTIVE"
-	id := rec.Save() // returns the new primary key
+	err := m.Dao.Db.NewSelect().
+		Model(record).
+		Where("f_status_code=?", statusCode).
+		Limit(1).
+		Scan(context.Background())
 
-	// Load
-	loaded := statusDao.New()
-	loaded.Load(id)
-	fmt.Println(loaded.StatusCode) // ACTIVE
+	if err != nil {
+		slog.Error("1. Statuses.LoadByName", "error", err)
+		return nil
+	}
 
-	// Update — use SetValue, which marks the column dirty
-	loaded.SetValue("statusCode", "RETIRED")
-	loaded.Save()
-
-	// Delete
-	loaded.Delete()
+	return m
 }
 ```
 
@@ -287,6 +365,8 @@ func (m) GetValue(column string) any
 func (m) GetID() int64 / SetID(id int64)
 func (m) Dirty(column string) / IsClean() / IsDirty() bool / Clean()
 func (m) ToAPI() map[string]any
+func (m) ToJSON() string
+func (m) ToJSONIndent() string
 func (m) FromAPI(data map[string]any) T
 func (m) ToWhere(query *bun.SelectQuery, args map[string]any) *bun.SelectQuery
 
@@ -329,6 +409,7 @@ converter.go     Type coercion and date parsing helpers
 ## Development
 
 ```bash
-go build ./...   # compile
-go vet ./...     # static checks
+make jgdb   # Run the demo
+make test   # Run the tests
+make cover  # check the coverage from tests
 ```
