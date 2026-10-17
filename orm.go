@@ -254,17 +254,17 @@ func (m *ModelRecord[T]) ToWhere(query *bun.SelectQuery, args map[string]any) *b
 		switch v := limits.(type) {
 		case map[string]any:
 			for key, value := range v {
-				query.Offset(AnyToInt(key))
-				query.Limit(AnyToInt(value))
+				query.Offset(AnyToInt64(key))
+				query.Limit(AnyToInt64(value))
 				break
 			}
 
 		case []any:
-			query.Offset(AnyToInt(v[0]))
-			query.Limit(AnyToInt(v[1]))
+			query.Offset(AnyToInt64(v[0]))
+			query.Limit(AnyToInt64(v[1]))
 
 		default:
-			query.Limit(AnyToInt(v))
+			query.Limit(AnyToInt64(v))
 		}
 	}
 
