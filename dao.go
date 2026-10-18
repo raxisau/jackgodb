@@ -28,7 +28,7 @@ func (dao *DAO) Close() {
 	dao.Db.Close()
 }
 
-func (dao *DAO) DbIn(count int) string {
+func DbIn(count int) string {
 	placeholders := make([]string, count)
 
 	for i := range placeholders {
