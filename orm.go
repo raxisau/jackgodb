@@ -86,6 +86,12 @@ func (m *ModelRecord[T]) Dirty(column string) {
 	m.dirty[column] = true
 }
 
+func (m *ModelRecord[T]) DirtyAll() {
+	for column := range m.dirty {
+		m.dirty[column] = true
+	}
+}
+
 func (m *ModelRecord[T]) Save() int64 {
 	record := m.Self
 
