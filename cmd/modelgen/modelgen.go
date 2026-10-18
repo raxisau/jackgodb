@@ -452,17 +452,6 @@ func extractFirstBacktickValue(s string) string {
 	return match[1]
 }
 
-func extractLastBacktickValue(s string) string {
-	re := regexp.MustCompile("`([^`]+)`")
-	matches := re.FindAllStringSubmatch(s, -1)
-
-	if len(matches) == 0 {
-		return ""
-	}
-
-	return matches[len(matches)-1][1]
-}
-
 // extractBacktickValues returns every backtick-quoted identifier on the line, in order.
 func extractBacktickValues(s string) []string {
 	re := regexp.MustCompile("`([^`]+)`")
