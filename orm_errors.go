@@ -27,7 +27,14 @@ func (m *ModelRecord[T]) SaveE() (int64, error) {
 func (m *ModelRecord[T]) InsertE() (int64, error) {
 	record := m.Self
 
-	if _, err := m.Dao.Db.NewInsert().Model(record).Exec(context.Background()); err != nil {
+	q := m.Dao.Db.NewInsert().Model(m.Self)
+	for column, dirty := range m.dirty {
+		if dirty {
+			q.Column(column)
+		}
+	}
+	_, err := q.Exec(context.Background())
+	if err != nil {
 		slog.Error("1. ModelRecord[T].InsertE", "error", err)
 		return 0, fmt.Errorf("insert: %w", err)
 	}
