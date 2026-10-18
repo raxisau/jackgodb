@@ -88,6 +88,9 @@ func (m *ModelRecord[T]) Dirty(column string) {
 
 func (m *ModelRecord[T]) DirtyAll() {
 	for column := range m.dirty {
+		if column == m.meta.PKColumn {
+			continue
+		}
 		m.dirty[column] = true
 	}
 }
