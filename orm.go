@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/schema"
 )
 
@@ -86,6 +85,9 @@ func (m *ModelRecord[T]) Dirty(column string) {
 	m.dirty[column] = true
 }
 
+// DirtyAll marks every non-primary-key column dirty, so the next Update or Save writes the whole
+// row. Use it when you have changed a record in ways SetValue did not track. Do not use it to
+// save a partial change: any column you did not load will be overwritten with its zero value.
 func (m *ModelRecord[T]) DirtyAll() {
 	for column := range m.dirty {
 		if column == m.meta.PKColumn {
@@ -119,20 +121,14 @@ func (m *ModelRecord[T]) InsertIgnore() int64 {
 
 	return record.GetID()
 }
+
+// Insert is the logging wrapper around InsertE. It returns 0 on failure. Use InsertE to see why.
 func (m *ModelRecord[T]) Insert() int64 {
-	record := m.Self
-
-	_, err := m.Dao.Db.NewInsert().
-		Ignore().
-		Model(record).
-		Exec(context.Background())
-
+	id, err := m.InsertE()
 	if err != nil {
-		slog.Error("1. ModelRecord[T].InsertIgnore", "error", err)
 		return 0
 	}
-
-	return record.GetID()
+	return id
 }
 func (m *ModelRecord[T]) Update() int64 {
 	record := m.Self
@@ -254,78 +250,6 @@ func (m *ModelRecord[T]) ToJSON() string {
 	}
 
 	return string(jsonBytes)
-}
-
-func (m *ModelRecord[T]) ToWhere(query *bun.SelectQuery, args map[string]any) *bun.SelectQuery {
-
-	limits, hasLimits := args["limits"]
-	if hasLimits {
-		switch v := limits.(type) {
-		case map[string]any:
-			for key, value := range v {
-				query.Offset(AnyToInt64(key))
-				query.Limit(AnyToInt64(value))
-				break
-			}
-
-		case []any:
-			query.Offset(AnyToInt64(v[0]))
-			query.Limit(AnyToInt64(v[1]))
-
-		default:
-			query.Limit(AnyToInt64(v))
-		}
-	}
-
-	order, hasOrder := args["order"]
-	if hasOrder {
-		switch v := order.(type) {
-		case map[string]any:
-			for key, value := range v {
-				query.OrderBy(m.getRealColumn(key), toOrder(value))
-			}
-
-		case []any:
-			// Handle arrays/lists
-			for _, item := range v {
-				query.OrderExpr(m.getRealColumn(item))
-			}
-
-		default:
-			query.OrderExpr(m.getRealColumn(v))
-		}
-	}
-
-	where, hasWhere := args["where"]
-	if hasWhere {
-		switch v := where.(type) {
-		case map[string]any:
-			// Handle dictionaries
-			for key, value := range v {
-				if strings.Contains(key, " ") || strings.Contains(key, "?") || strings.Contains(key, "=") {
-					key = m.getRealColumn(key)
-				} else {
-					key = fmt.Sprintf("%s = ?", m.getRealColumn(key))
-				}
-				if strings.Contains(key, "?") {
-					query.Where(key, value)
-				} else {
-					query.Where(key)
-				}
-			}
-
-		case []any:
-			// Handle arrays/lists
-			for _, item := range v {
-				query.Where(m.getRealColumn(item))
-			}
-
-		default:
-			query.Where(m.getRealColumn(v))
-		}
-	}
-
-	return query
 }
 
 func (m *ModelRecord[T]) Load(id int64) T {

@@ -127,10 +127,14 @@ func parseSchema(schema string) (Table, error) {
 			table.PrimaryKey = extractFirstBacktickValue(line)
 
 		case strings.HasPrefix(upperLine, "UNIQUE KEY"):
-			uniqueCol := extractLastBacktickValue(line)
-
+			// Only a single-column key maps onto a per-column unique tag. A composite key is one
+			// constraint over several columns, so marking each column would misstate it.
+			cols := keyColumns(line)
+			if len(cols) != 1 {
+				continue
+			}
 			for i := range table.Columns {
-				if table.Columns[i].Name == uniqueCol {
+				if table.Columns[i].Name == cols[0] {
 					table.Columns[i].IsUnique = true
 				}
 			}
@@ -167,8 +171,7 @@ func parseColumn(line string) Column {
 	col.IsAuto = strings.Contains(rest, "auto_increment")
 
 	col.GoType = sqlTypeToGoType(sqlType, col.IsNullable)
-	if strings.EqualFold(col.Name, "fldLastUpdated") ||
-		strings.EqualFold(col.Name, "f_updated_at") {
+	if isTimestampType(sqlType) {
 		col.GoType = "time.Time"
 	}
 
@@ -283,6 +286,8 @@ func buildBunTag(col Column) string {
 	}
 
 	if strings.EqualFold(col.Name, "fldLastUpdated") ||
+		strings.EqualFold(col.Name, "f_modified_at") ||
+		strings.EqualFold(col.Name, "f_created_at") ||
 		strings.EqualFold(col.Name, "f_updated_at") {
 		parts = append(parts, "nullzero")
 		parts = append(parts, "notnull")
@@ -456,4 +461,31 @@ func extractLastBacktickValue(s string) string {
 	}
 
 	return matches[len(matches)-1][1]
+}
+
+// extractBacktickValues returns every backtick-quoted identifier on the line, in order.
+func extractBacktickValues(s string) []string {
+	re := regexp.MustCompile("`([^`]+)`")
+	var out []string
+	for _, m := range re.FindAllStringSubmatch(s, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// isTimestampType reports whether a SQL type holds a date and time. Mapping is by type, not name.
+func isTimestampType(sqlType string) bool {
+	t := strings.ToLower(sqlType)
+	return strings.HasPrefix(t, "timestamp") || strings.HasPrefix(t, "datetime")
+}
+
+// keyColumns returns the column names inside the parentheses of a KEY line. The key name before
+// the parentheses is not a column, so it is skipped.
+func keyColumns(line string) []string {
+	open := strings.Index(line, "(")
+	close := strings.LastIndex(line, ")")
+	if open < 0 || close <= open {
+		return nil
+	}
+	return extractBacktickValues(line[open:close])
 }

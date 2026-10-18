@@ -149,19 +149,23 @@ func main() {
 	rec.SetValue("statusReasonDefault", "rec.SetValue statusReasonDefault")
 	rec.SetValue("statusURL", "http://rec.SetValuestatusURL")
 	rec.SetValue("comments", "rec.SetValue comments")
-	id := rec.Save() // returns the new primary key
+	id, err := rec.SaveE() // returns the new primary key, or the error
+	if err != nil {
+		panic(err)
+	}
 
 	// Load
-	loaded := statusDao.NewStatuses()
-	loaded.Load(id)
+	loaded, err := statusDao.NewStatuses().LoadE(id)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(loaded.ToJSONIndent())
 
 	// Update — use SetValue, which marks the column dirty
 	loaded.SetValue("statusCode", "RETIRED")
-	loaded.Save()
-
-	loaded.Load(id)
-	fmt.Println(loaded.ToJSONIndent())
+	if _, err := loaded.SaveE(); err != nil {
+		panic(err)
+	}
 
 	// Delete
 	loaded.Delete()
@@ -199,18 +203,27 @@ dao := jackgodb.OpenPostgreSQLDBConnection("postgres://user:pass@127.0.0.1:5432/
 
 ## CRUD reference
 
-All methods below are promoted from the embedded `ModelRecord[T]`. They return row counts / ids
-(`int64`) and **log errors via `log/slog`** instead of returning them — see
-[Known limitations](#known-limitations).
+Two sets of CRUD methods are promoted from the embedded `ModelRecord[T]`:
+
+- **Error-returning (`*E`)**: the recommended methods. They return the error, so callers can
+  tell "not found", "no changes", and "failed" apart.
+- **Logging (no suffix)**: kept for compatibility. They log errors via `log/slog` and return
+  `0` or an empty record on failure. See [Known limitations](#known-limitations).
 
 | Method | Behaviour |
 |---|---|
-| `Save() int64` | `Insert()` when the primary key is zero, otherwise `Update()`. Returns the new id or rows affected. |
-| `Insert() int64` | Inserts **only the dirty columns** (all columns when none are dirty). Returns the new primary key (via `LastInsertId` on MySQL; via `RETURNING` on SQLite and PostgreSQL). |
-| `InsertIgnore() int64` | `INSERT IGNORE` / `ON CONFLICT DO NOTHING` equivalent. Existing rows are left untouched. |
-| `Update() int64` | Updates only dirty columns by primary key. No-ops (logs an error) when the record is clean. |
+| `SaveE() (int64, error)` | `InsertE()` when the primary key is zero, otherwise `UpdateE()`. |
+| `InsertE() (int64, error)` | Inserts **only the dirty columns** (all columns when none are dirty). Returns the new primary key. A duplicate unique value is returned as an error. |
+| `UpdateE() (int64, error)` | Updates only dirty columns by primary key. Returns `ErrNoChanges` when the record is clean. |
+| `LoadE(id int64) (T, error)` | Loads by primary key. Returns `ErrNotFound` when no row matches. On error it returns the zero value of `T`. |
+| `Save() int64` | Logging wrapper around `SaveE`. Returns 0 on failure. |
+| `Insert() int64` | Logging wrapper around `InsertE`. Returns 0 on failure. **Changed:** this no longer uses `INSERT OR IGNORE`, so a duplicate is an error (0), not a silent no-op. |
+| `InsertIgnore() int64` | `INSERT IGNORE` / `ON CONFLICT DO NOTHING` equivalent. Existing rows are left untouched. Use this when a duplicate should be ignored. |
+| `Update() int64` | Logging wrapper around `UpdateE`. Returns 0 when clean or on failure. |
 | `Delete() int64` | Deletes by primary key. Returns rows affected. |
-| `Load(id int64) T` | `SELECT ... WHERE pk = id LIMIT 1`, scanning into the record. On failure the id is reset to 0. |
+| `Load(id int64) T` | Logging wrapper around `LoadE`. On failure the id is reset to 0. |
+
+Exported errors: `ErrNoChanges`, `ErrNotFound`. Use `errors.Is` to check them.
 
 Dirty tracking:
 
@@ -345,8 +358,11 @@ func (dao *ModelDAO[T]) Attach(record T)
 func (dao *ModelDAO[T]) AttachList(records []T)
 
 // orm.go — promoted onto your model via ModelRecord[T]
+func (m) SaveE() (int64, error) / InsertE() (int64, error) / UpdateE() (int64, error)
+func (m) LoadE(id int64) (T, error)
 func (m) Save() / Insert() / InsertIgnore() / Update() / Delete() int64
 func (m) Load(id int64) T
+var ErrNoChanges, ErrNotFound error
 func (m) SetValue(column string, value any) bool
 func (m) GetValue(column string) any
 func (m) GetID() int64 / SetID(id int64)
@@ -369,14 +385,13 @@ func StringValue(*string) string
 
 ## Known limitations
 
-- **Errors are logged, not returned.** CRUD methods write failures to `log/slog` and return `0` /
-  empty records; callers cannot distinguish "not found" from a connection failure. Treat this as
-  the library's biggest rough edge.
+- **Logging methods hide errors.** The methods without a suffix write failures to `log/slog` and
+  return `0` / empty records. Use the `*E` methods, which return the error.
 - **Raw SQL surface in `ToWhere`.** String/list `where` and `order` keys are interpolated as SQL.
   Parameterize everything user-controlled or validate against the alias map first.
 - **No context parameter.** Queries run on `context.Background()`; there is no cancellation or
   timeout plumbing yet.
-- **`Update()` no-ops on clean records** (logging an error), so field writes must go through
+- **`UpdateE()` returns `ErrNoChanges` on clean records**, so field writes must go through
   `SetValue`/`Dirty`.
 - **`modelgen` targets MySQL-style DDL** (backtick-quoted identifiers, `auto_increment`, inline
   `PRIMARY KEY`/`UNIQUE KEY` lines).
