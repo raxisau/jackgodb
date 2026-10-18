@@ -12,7 +12,7 @@ func TestDbInAndAttach(t *testing.T) {
 	defer dao.Close()
 
 	// DbIn for sqlite should use "?" placeholders
-	in := dao.DbIn(1, 3)
+	in := dao.DbIn(3)
 	if in != "?,?,?" {
 		t.Fatalf("expected '?,?,?' got %q", in)
 	}

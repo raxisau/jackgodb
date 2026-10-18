@@ -1,7 +1,6 @@
 package jackgodb
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/uptrace/bun"
@@ -29,20 +28,13 @@ func (dao *DAO) Close() {
 	dao.Db.Close()
 }
 
-func (dao *DAO) DbIn(start, count int) string {
+func (dao *DAO) DbIn(count int) string {
 	placeholders := make([]string, count)
 
-	switch dao.dialect {
-	case DialectPostgreSQL:
-		for i := range placeholders {
-			placeholders[i] = "$" + strconv.Itoa(start+i)
-		}
-
-	default:
-		for i := range placeholders {
-			placeholders[i] = "?"
-		}
+	for i := range placeholders {
+		placeholders[i] = "?"
 	}
+
 	return strings.Join(placeholders, ",")
 }
 

@@ -351,7 +351,7 @@ var SQLDebug bool
 // dao.go
 func NewDAO(db *bun.DB) *DAO
 func (dao *DAO) Close()
-func (dao *DAO) DbIn(start, count int) string
+func (dao *DAO) DbIn(count int) string
 func NewModelDAO[T DBModel](dao *DAO, alias map[string]string, newRecord func() T) *ModelDAO[T]
 func (dao *ModelDAO[T]) New() T
 func (dao *ModelDAO[T]) Attach(record T)
