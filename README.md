@@ -7,7 +7,7 @@ schema-to-model code generator — so your models expose CRUD without writing SQ
 Supported backends: **MySQL**, **SQLite**, and **PostgreSQL** (single code path, dialect-aware).
 
 - Module: `github.com/raxisau/jackgodb`
-- Requires: Go 1.26+
+- Requires: go 1.27.1+
 - License: The Unlicense (public domain) — see [LICENSE](LICENSE)
 
 ## Installation
