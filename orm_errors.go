@@ -28,11 +28,11 @@ func (m *ModelRecord[T]) InsertE() (int64, error) {
 	record := m.Self
 
 	q := m.Dao.Db.NewInsert().Model(m.Self)
-	for column, dirty := range m.dirty {
-		if dirty {
-			q.Column(column)
-		}
-	}
+	// for column, dirty := range m.dirty {
+	// 	if dirty {
+	// 		q.Column(column)
+	// 	}
+	// }
 	_, err := q.Exec(context.Background())
 	if err != nil {
 		slog.Error("1. ModelRecord[T].InsertE", "error", err)
